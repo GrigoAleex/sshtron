@@ -25,6 +25,7 @@
 /* Begin PBXFileReference section */
 		076296612BFB7DE9000DCD91 /* SSHtron */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = SSHtron; sourceTree = BUILT_PRODUCTS_DIR; };
 		076296642BFB7DE9000DCD91 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		0762966B2BFB8670000DCD91 /* connection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = connection.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				076296642BFB7DE9000DCD91 /* main.cpp */,
+				0762966B2BFB8670000DCD91 /* connection.h */,
 			);
 			path = SSHtron;
 			sourceTree = "<group>";
