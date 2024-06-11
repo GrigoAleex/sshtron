@@ -10,6 +10,3 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Add the executable
 add_executable(sshtron src/main.cpp)
 
-# Specify installation targets
-install(TARGETS sshtron DESTINATION /usr/local/bin)
-
