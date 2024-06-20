@@ -1,57 +1,42 @@
-#ifndef connection_h
-#define connection_h
+#ifndef CONNECTION_H
+#define CONNECTION_H
 
-#include <vector>
-#include <string>
+#define MAX_STRING_LENGTH 255
+#define MAX_CONNECTION_STRING_LENGTH (MAX_STRING_LENGTH * 2 + 15 + 3)
 
-namespace sshtron {
-    class Connection {
-    public:
-        std::string nickname;
-        std::string user;
-        std::string ipAddress;
+typedef struct {
+    char nickname[MAX_STRING_LENGTH];
+    char user[MAX_STRING_LENGTH];
+    char ipAddress[15];
+} Connection;
 
-        Connection() = default;
+typedef struct {
+    Connection **connections;
+    u_int16_t size;
+} Connections;
 
-        Connection(const std::string& nick, const std::string& usr, const std::string& ip)
-            : nickname(nick), user(usr), ipAddress(ip) {}
+/** Initializes a ssh session for the given connection */
+int connection_init(const Connection *);
 
-        friend std::ostream& operator<<(std::ostream& os, const Connection& conn);
-        friend std::istream& operator>>(std::istream& is, Connection& conn);
-        
-        static std::vector<Connection> all(const std::string& filename) {
-            std::vector<Connection> connections;
-            std::ifstream infile(filename);
-            
-            if (infile) {
-                Connection conn;
-                while (infile >> conn) {
-                    connections.push_back(conn);
-                }
-                infile.close();
-            }
-            
-            return connections;
-        }
-        
-        static void writeConnectionsToFile(const std::string& filename, const std::vector<Connection>& connections) {
-            std::ofstream outfile(filename);
-            for (const auto& conn : connections) {
-                outfile << conn << std::endl;
-            }
-            outfile.close();
-        }
-    };
+/** Creates a connection */
+Connection* connection_create(const char*, const char*, const char*);
 
-    std::ostream& operator<<(std::ostream& os, const Connection& conn) {
-        os << conn.nickname << " " << conn.user << " " << conn.ipAddress;
-        return os;
-    }
+/** Destroys a connection */
+void Connection_destroy(Connection *);
 
-    std::istream& operator>>(std::istream& is, Connection& conn) {
-        is >> conn.nickname >> conn.user >> conn.ipAddress;
-        return is;
-    }
-}
+/** Returns the connection string with the format: "nickname user ipAddress" */
+char* connection_string(const Connection *);
 
-#endif /* connection_h */
+/** Reads an array of connections from a file */
+Connections* connections_load(const char *filename);
+
+/** Saves an array of connections to a file */
+int connections_save_to_file(const char *filename, const Connections *connections);
+
+/** Pushes a connection to the end of the array */
+Connections* connections_push_back(Connections *connections, Connection *connection);
+
+/** Removes a connection from the array */
+Connections* connections_remove(Connections *connections, const char* nickname);
+
+#endif // CONNECTION_H
