@@ -1,5 +1,5 @@
 #include <fcntl.h>
-#include <unistd.h>
+#include "compat.h"
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
@@ -51,37 +51,111 @@ char* connection_string(const Connection *conn) {
     return buffer;
 }
 
-Connections* connections_load(const char *filename) {
-    int fd = open(filename, O_RDONLY | O_CREAT, 0644);
-    assert(fd != -1);
-    
-    u_int16_t cappacity;
-    read(fd, &cappacity, sizeof(cappacity));
-    Connections *connections = (Connections *)malloc(sizeof(Connections));
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
 
-    if (cappacity == 0) {
-        close(fd);
+#ifndef MAX_CONNECTION_STRING_LENGTH
+#define MAX_CONNECTION_STRING_LENGTH 512  // sigur pentru "nickname: user@host"
+#endif
+
+// forward
+Connection* connection_create(const char* nickname, const char* user, const char* host);
+
+static void rstrip(char *s) {
+    size_t n = strlen(s);
+    while (n && (s[n-1] == '\n' || s[n-1] == '\r' || s[n-1] == ' ' || s[n-1] == '\t')) {
+        s[--n] = '\0';
+    }
+}
+
+static void lstrip(char *s) {
+    size_t n = 0, len = strlen(s);
+    while (n < len && (s[n] == ' ' || s[n] == '\t')) n++;
+    if (n) memmove(s, s + n, len - n + 1);
+}
+
+static void strip(char *s) { rstrip(s); lstrip(s); }
+
+// Parsează "nickname: user@host"
+static int parse_line(const char *line_in, char *out_nick, size_t n1, char *out_user, size_t n2, char *out_host, size_t n3) {
+    char buf[MAX_CONNECTION_STRING_LENGTH];
+    strncpy(buf, line_in, sizeof(buf)-1);
+    buf[sizeof(buf)-1] = '\0';
+
+    strip(buf);
+    if (buf[0] == '\0') return 0; // linie goală
+
+    // caută ':'
+    char *colon = strchr(buf, ':');
+    if (!colon) return 0;
+
+    *colon = '\0';
+    char *nick = buf;
+    char *rest = colon + 1;
+    strip(nick);
+    strip(rest);
+
+    // așteptăm "user@host" în rest
+    char *at = strchr(rest, '@');
+    if (!at) return 0;
+
+    *at = '\0';
+    char *user = rest;
+    char *host = at + 1;
+    strip(user);
+    strip(host);
+
+    if (nick[0] == '\0' || user[0] == '\0' || host[0] == '\0') return 0;
+
+    strncpy(out_nick, nick, n1-1); out_nick[n1-1] = '\0';
+    strncpy(out_user, user, n2-1); out_user[n2-1] = '\0';
+    strncpy(out_host, host, n3-1); out_host[n3-1] = '\0';
+    return 1;
+}
+
+Connections* connections_load(const char *filename) {
+    printf("Reading from file %s\n", filename);
+
+    FILE *f = fopen(filename, "rb");   // text is fine; rb is harmless
+    Connections *connections = (Connections*)calloc(1, sizeof(Connections));
+    if (!connections) return NULL;
+
+    if (!f) {
+        // fișierul nu există încă → listă goală
         connections->connections = NULL;
         connections->size = 0;
         return connections;
     }
 
-    connections->size = cappacity;
-    connections->connections = (Connection **)malloc(sizeof(Connection *) * cappacity);
-
     char line[MAX_CONNECTION_STRING_LENGTH];
-    while (cappacity > 0) {
-        read(fd, line, MAX_CONNECTION_STRING_LENGTH);
+    size_t cap = 0, used = 0;
+    Connection **vec = NULL;
 
-        char *nickname = strtok(line, ":");
-        char *user = strtok(NULL, "@");
-        char *ipAddress = strtok(NULL, "\0");
+    while (fgets(line, sizeof(line), f)) {
+        char nickname[256], user[128], host[256];
+        if (!parse_line(line, nickname, sizeof(nickname), user, sizeof(user), host, sizeof(host))) {
+            continue; // sar peste liniile invalide
+        }
 
+        Connection *c = connection_create(nickname, user, host);
+        if (!c) continue;
 
-        connections->connections[--cappacity] = connection_create(nickname, user, ipAddress);
+        if (used == cap) {
+            size_t newcap = cap ? cap * 2 : 8;
+            Connection **tmp = (Connection**)realloc(vec, newcap * sizeof(*tmp));
+            if (!tmp) { /* out of memory */ break; }
+            vec = tmp; cap = newcap;
+        }
+        vec[used++] = c;
     }
 
-    close(fd);
+    fclose(f);
+
+    connections->connections = vec;
+    connections->size = (uint16_t)used; // dacă ai nevoie de uint16_t
+
     return connections;
 }
 
@@ -91,7 +165,7 @@ int connections_save_to_file(const char *filename, const Connections *connection
     assert(fd != -1);
 
     if (connections == NULL) {
-        write(fd, 0, sizeof(u_int16_t));
+        write(fd, 0, sizeof(uint16_t));
         close(fd);
         return 0;
     }
@@ -114,10 +188,10 @@ Connections* connections_push_back(Connections *connections, Connection *connect
 }
 
 Connections* connections_remove(Connections *connections, const char* nickname) {
-    for (u_int16_t i = 0; i < connections->size; i++) {
+    for (uint16_t i = 0; i < connections->size; i++) {
         if (strcmp(connections->connections[i]->nickname, nickname) == 0) {
             Connection_destroy(connections->connections[i]);
-            for (u_int16_t j = i; j < connections->size - 1; j++) {
+            for (uint16_t j = i; j < connections->size - 1; j++) {
                 connections->connections[j] = connections->connections[j + 1];
             }
             

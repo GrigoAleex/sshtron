@@ -4,6 +4,8 @@
 #define MAX_STRING_LENGTH 255
 #define MAX_CONNECTION_STRING_LENGTH (MAX_STRING_LENGTH * 2 + 15 + 3)
 
+#include <stdint.h>
+
 typedef struct {
     char nickname[MAX_STRING_LENGTH];
     char user[MAX_STRING_LENGTH];
@@ -12,7 +14,7 @@ typedef struct {
 
 typedef struct {
     Connection **connections;
-    u_int16_t size;
+    uint16_t size;
 } Connections;
 
 /** Initializes a ssh session for the given connection */

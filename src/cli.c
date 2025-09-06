@@ -1,10 +1,16 @@
+#include "cli.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <termios.h>
-#include <unistd.h>
+#include "compat.h"
 #include <string.h>
 
-#include "cli.h"
+#ifdef _WIN32
+  #include <conio.h>
+#else
+  #include <termios.h>
+  #include <unistd.h>
+#endif
 
 #define ART_WIDTH 68
 #define UP_ARROW 65
@@ -13,39 +19,24 @@
 // TODO: Move this to a config file
 #define FILENAME "build/saved_connections"
 
-char getch(void) {
-    char buf = 0;
-    struct termios old = {0};
-    fflush(stdout);
+static void cli_init_stdio(void) {
+    setvbuf(stdout, NULL, _IONBF, 0); // no buffering → vezi imediat mesajele
+}
 
-    // Get the terminal attributes
-    if (tcgetattr(0, &old) < 0)
-        perror("tcsetattr()");
-
-    // Disable canonical mode and echo
-    old.c_lflag &= ~ICANON;
-    old.c_lflag &= ~ECHO;
-    old.c_cc[VMIN] = 1;
-    old.c_cc[VTIME] = 0;
-
-    // Set the new terminal attributes
-    if (tcsetattr(0, TCSANOW, &old) < 0)
-        perror("tcsetattr ICANON");
-
-    // Read a single character from the terminal
-    if (read(0, &buf, 1) < 0) {
-        // Print error message to stderr instead of stdout
-        perror("read()");
-        fprintf(stderr, "Error reading character from terminal.\n");
-    }
-
-    // Restore the old terminal attributes
-    old.c_lflag |= ICANON;
-    old.c_lflag |= ECHO;
-    if (tcsetattr(0, TCSADRAIN, &old) < 0)
-        perror("tcsetattr ~ICANON");
-
-    return buf;
+static int getch_raw(void) {
+#ifdef _WIN32
+    return _getch();
+#else
+    struct termios oldt, newt;
+    int ch;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return ch;
+#endif
 }
 
 void cli_print_brand(void) {
@@ -79,12 +70,14 @@ void cli_print_title(const char *title) {
  * @returns 1 if user selected an option, 0 for arrow movement, -1 for q and charCode for any other key
  */
 int cli_select(int *selectedIndex, const int maxIndex) {
-    char c = getch();
+    char c = getch_raw();
     switch (c) {
         case UP_ARROW:
+        case 72:
             *selectedIndex = (*selectedIndex - 1 + maxIndex) % maxIndex;
             return 0;
         case DOWN_ARROW:
+        case 80:
             *selectedIndex = (*selectedIndex + 1) % maxIndex;
             return 0;
         case ' ':
@@ -100,7 +93,7 @@ int cli_select(int *selectedIndex, const int maxIndex) {
 }
 
 void cli_print_menu(CLIManager *cli, int selectedIndex) {
-#if defined(_WIN32) || defined(WIN32) 
+#if defined(_WIN32) || defined(WIN32)
     system("cls");
 #else
     system("clear");
@@ -210,7 +203,7 @@ void cli_print_register(CLIManager *cli) {
     cli_print_brand();
     cli_print_title("Creating a new connection");
     
-    char nickname[MAX_STRING_LENGTH];
+    char nickname[MAX_STRING_LENGTH + 16];
     char user[MAX_STRING_LENGTH];
     char ipAddress[15];
 
@@ -224,7 +217,7 @@ void cli_print_register(CLIManager *cli) {
     scanf(" %s", nickname);
 
     if (strlen(nickname) == 0) {
-        snprintf(nickname, strlen(user) + 1 + strlen(ipAddress), "%s@%s", user, ipAddress);
+        snprintf(nickname, sizeof(nickname), "%s@%s", user, ipAddress);
     }
 
     Connection *conn = connection_create(nickname, user, ipAddress);
